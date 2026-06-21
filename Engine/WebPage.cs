@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace WebBrowser.Engine;
 
 public enum ContentType { Html, Json, Xml, PlainText, Feed, Image, Binary, Unknown }
