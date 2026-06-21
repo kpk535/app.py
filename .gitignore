@@ -1,0 +1,40 @@
+# Build results
+bin/
+obj/
+publish/
+*.dll
+*.exe
+*.pdb
+*.cache
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.sln.docstates
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+.DS_Store?
+
+# Python (legacy)
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+game_env/
+virtual_machine/
+
+# Misc
+*.log
+.env
+.env.local
