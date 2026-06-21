@@ -1,75 +1,332 @@
 <Window x:Class="WebBrowser.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Web Browser" Height="800" Width="1200"
-        Background="#F5F5F5"
-        Icon="Assets/browser-icon.ico"
-        WindowStartupLocation="CenterScreen">
-    <DockPanel>
-        <!-- Top Menu Bar -->
-        <StackPanel DockPanel.Dock="Top" Background="White" Margin="0,0,0,1">
-            <!-- Navigation Bar -->
-            <StackPanel Orientation="Horizontal" Padding="10" Background="#FAFAFA" Gap="8">
-                <Button x:Name="BackBtn" Width="40" Height="40"
-                        VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
-                        Background="#667eea" Foreground="White" FontSize="16" Cursor="Hand"
-                        Click="BackBtn_Click">◀</Button>
-                <Button x:Name="ForwardBtn" Width="40" Height="40"
-                        VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
-                        Background="#667eea" Foreground="White" FontSize="16" Cursor="Hand"
-                        Click="ForwardBtn_Click">▶</Button>
-                <Button x:Name="RefreshBtn" Width="40" Height="40"
-                        VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
-                        Background="#667eea" Foreground="White" FontSize="16" Cursor="Hand"
-                        Click="RefreshBtn_Click">⟳</Button>
+        Title="Custom Browser" Height="860" Width="1300"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Surface2Brush}"
+        FontFamily="Segoe UI">
 
-                <!-- Address Bar -->
-                <TextBox x:Name="AddressBar"
-                         Height="35" Padding="10"
-                         FontSize="13"
-                         PreviewKeyDown="AddressBar_PreviewKeyDown"
-                         BorderBrush="#DDD" BorderThickness="1" CornerRadius="5"
-                         Background="White" Foreground="#333"/>
+    <Window.InputBindings>
+        <KeyBinding Key="T" Modifiers="Ctrl" Command="{Binding NewTabCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+        <KeyBinding Key="W" Modifiers="Ctrl" Command="{Binding CloseTabCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+        <KeyBinding Key="F" Modifiers="Ctrl" Command="{Binding FindCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+        <KeyBinding Key="R" Modifiers="Ctrl" Command="{Binding RefreshCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+        <KeyBinding Key="D" Modifiers="Ctrl" Command="{Binding BookmarkCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+        <KeyBinding Key="U" Modifiers="Ctrl" Command="{Binding ViewSourceCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+        <KeyBinding Key="Left" Modifiers="Alt" Command="{Binding BackCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+        <KeyBinding Key="Right" Modifiers="Alt" Command="{Binding ForwardCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+        <KeyBinding Key="F8" Command="{Binding ReaderModeCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+        <KeyBinding Key="F9" Command="{Binding DarkModeCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+    </Window.InputBindings>
 
-                <Button x:Name="GoBtn" Width="50" Height="35"
-                        Content="Go" Background="#667eea" Foreground="White"
-                        Click="GoBtn_Click" Cursor="Hand" FontWeight="Bold"/>
+    <DockPanel LastChildFill="True">
+
+        <!-- ===== MENU BAR ===== -->
+        <Menu DockPanel.Dock="Top" Background="White" Foreground="{StaticResource TextPrimaryBrush}"
+              BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,2">
+            <MenuItem Header="File" FontSize="12">
+                <MenuItem Header="New Tab" InputGestureText="Ctrl+T" Click="MenuNewTab_Click"/>
+                <MenuItem Header="Close Tab" InputGestureText="Ctrl+W" Click="MenuCloseTab_Click"/>
+                <Separator/>
+                <MenuItem Header="View Source" InputGestureText="Ctrl+U" Click="MenuViewSource_Click"/>
+                <Separator/>
+                <MenuItem Header="Exit" Click="MenuExit_Click"/>
+            </MenuItem>
+            <MenuItem Header="View" FontSize="12">
+                <MenuItem Header="Reader Mode" InputGestureText="F8" Click="MenuReaderMode_Click"/>
+                <MenuItem Header="Dark Mode" InputGestureText="F9" Click="MenuDarkMode_Click"/>
+                <Separator/>
+                <MenuItem Header="Zoom In" InputGestureText="Ctrl++" Click="MenuZoomIn_Click"/>
+                <MenuItem Header="Zoom Out" InputGestureText="Ctrl+-" Click="MenuZoomOut_Click"/>
+                <MenuItem Header="Reset Zoom" InputGestureText="Ctrl+0" Click="MenuZoomReset_Click"/>
+                <Separator/>
+                <MenuItem Header="Page Info" Click="MenuPageInfo_Click"/>
+            </MenuItem>
+            <MenuItem Header="History" FontSize="12">
+                <MenuItem Header="Back" InputGestureText="Alt+←" Click="MenuBack_Click"/>
+                <MenuItem Header="Forward" InputGestureText="Alt+→" Click="MenuForward_Click"/>
+                <Separator/>
+                <MenuItem Header="Show History" Click="MenuShowHistory_Click"/>
+                <MenuItem Header="Clear History" Click="MenuClearHistory_Click"/>
+            </MenuItem>
+            <MenuItem Header="Bookmarks" FontSize="12">
+                <MenuItem Header="Bookmark this page" InputGestureText="Ctrl+D" Click="MenuBookmark_Click"/>
+                <Separator/>
+                <MenuItem x:Name="BookmarksMenu" Header="All Bookmarks"/>
+            </MenuItem>
+            <MenuItem Header="Tools" FontSize="12">
+                <MenuItem Header="Find in Page" InputGestureText="Ctrl+F" Click="MenuFind_Click"/>
+                <Separator/>
+                <MenuItem Header="Settings" Click="MenuSettings_Click"/>
+                <MenuItem Header="About" Click="MenuAbout_Click"/>
+            </MenuItem>
+        </Menu>
+
+        <!-- ===== TOOLBAR ===== -->
+        <Border DockPanel.Dock="Top" Background="White"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
+                Padding="10,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Nav Buttons -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,8,0">
+                    <Button x:Name="BackBtn" Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Back (Alt+←)" Click="BackBtn_Click" IsEnabled="False">
+                        <TextBlock Text="&#x2190;" FontSize="16" FontWeight="Bold"/>
+                    </Button>
+                    <Button x:Name="ForwardBtn" Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Forward (Alt+→)" Click="ForwardBtn_Click" IsEnabled="False">
+                        <TextBlock Text="&#x2192;" FontSize="16" FontWeight="Bold"/>
+                    </Button>
+                    <Button x:Name="RefreshBtn" Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Refresh (Ctrl+R)" Click="RefreshBtn_Click">
+                        <TextBlock x:Name="RefreshIcon" Text="&#x21BB;" FontSize="15"/>
+                    </Button>
+                    <Button x:Name="HomeBtn" Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Home" Click="HomeBtn_Click">
+                        <TextBlock Text="&#x2302;" FontSize="16"/>
+                    </Button>
+                </StackPanel>
+
+                <!-- Address + Security + Progress -->
+                <Grid Grid.Column="1" Margin="0,0,8,0">
+                    <TextBox x:Name="AddressBar"
+                             Style="{StaticResource AddressBarStyle}"
+                             PreviewKeyDown="AddressBar_KeyDown"
+                             GotFocus="AddressBar_GotFocus"/>
+                    <!-- Security Badge (inside address bar, right side) -->
+                    <TextBlock x:Name="SecureIcon" Text="🔒"
+                               HorizontalAlignment="Left" VerticalAlignment="Center"
+                               Margin="12,0,0,0" FontSize="12" Opacity="0.5"
+                               Visibility="Collapsed"/>
+                    <!-- Loading Progress Overlay -->
+                    <ProgressBar x:Name="LoadProgress"
+                                 Height="2" VerticalAlignment="Bottom"
+                                 Background="Transparent"
+                                 Foreground="{StaticResource PrimaryBrush}"
+                                 Minimum="0" Maximum="100" Value="0"
+                                 Visibility="Collapsed"/>
+                </Grid>
+
+                <!-- Right Toolbar -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button x:Name="GoBtn" Content="Go"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Width="44" Click="GoBtn_Click"/>
+                    <Separator Width="1" Background="{StaticResource BorderBrush}" Margin="8,6"/>
+                    <Button x:Name="BookmarkBtn" Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Bookmark (Ctrl+D)" Click="BookmarkBtn_Click">
+                        <TextBlock x:Name="BookmarkIcon" Text="☆" FontSize="15"/>
+                    </Button>
+                    <Button x:Name="ReaderBtn" Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Reader Mode (F8)" Click="ReaderModeBtn_Click">
+                        <TextBlock Text="📖" FontSize="14"/>
+                    </Button>
+                    <Button x:Name="DarkModeBtn" Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Dark Mode (F9)" Click="DarkModeBtn_Click">
+                        <TextBlock x:Name="DarkIcon" Text="🌙" FontSize="14"/>
+                    </Button>
+                    <Button Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Find (Ctrl+F)" Click="FindBtn_Click">
+                        <TextBlock Text="🔍" FontSize="13"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ===== TAB BAR ===== -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource Surface3Brush}"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
+                Height="40">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ScrollViewer Grid.Column="0" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="TabBar" Orientation="Horizontal" VerticalAlignment="Bottom"/>
+                </ScrollViewer>
+                <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" Width="36" Height="36"
+                        Click="NewTabBtn_Click" ToolTip="New Tab (Ctrl+T)" Margin="4,0">
+                    <TextBlock Text="+" FontSize="18" FontWeight="Light"/>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- ===== FIND BAR ===== -->
+        <Border x:Name="FindBar" DockPanel.Dock="Bottom"
+                Background="White" BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0" Padding="12,8" Visibility="Collapsed">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Find:" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0"/>
+                <TextBox x:Name="FindBox" Width="220" Height="28"
+                         VerticalContentAlignment="Center" Padding="8,0"
+                         FontSize="12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                         PreviewKeyDown="FindBox_KeyDown"
+                         TextChanged="FindBox_TextChanged"/>
+                <TextBlock x:Name="FindMatchCount" VerticalAlignment="Center" FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" Margin="8,0"/>
+                <Button Content="▲" Style="{StaticResource GhostButtonStyle}" Width="28" Margin="4,0,0,0"
+                        Click="FindPrev_Click" ToolTip="Previous"/>
+                <Button Content="▼" Style="{StaticResource GhostButtonStyle}" Width="28" Margin="2,0,0,0"
+                        Click="FindNext_Click" ToolTip="Next"/>
+                <Button Content="✕" Style="{StaticResource GhostButtonStyle}" Width="28" Margin="8,0,0,0"
+                        Click="FindClose_Click"/>
             </StackPanel>
+        </Border>
 
-            <!-- Status Bar -->
-            <StackPanel Orientation="Horizontal" Padding="10" Background="White" Gap="10" Height="30">
-                <TextBlock x:Name="StatusText" VerticalAlignment="Center" FontSize="11" Foreground="#666"/>
-                <TextBlock x:Name="LoadTimeText" VerticalAlignment="Center" FontSize="11" Foreground="#999"/>
-            </StackPanel>
-        </StackPanel>
+        <!-- ===== STATUS BAR ===== -->
+        <Border DockPanel.Dock="Bottom" Background="White"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0"
+                Height="24" Padding="12,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="StatusText" Grid.Column="0"
+                           VerticalAlignment="Center" FontSize="11"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           TextTrimming="CharacterEllipsis"/>
+                <Separator Grid.Column="1" Width="1" Background="{StaticResource BorderBrush}" Margin="8,4"/>
+                <TextBlock x:Name="LoadTimeText" Grid.Column="2"
+                           VerticalAlignment="Center" FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}"/>
+                <Separator Grid.Column="3" Width="1" Background="{StaticResource BorderBrush}" Margin="8,4"/>
+                <TextBlock x:Name="ZoomText" Grid.Column="4"
+                           VerticalAlignment="Center" FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" Text="100%"
+                           Cursor="Hand" MouseLeftButtonUp="ZoomText_Click"/>
+            </Grid>
+        </Border>
 
-        <!-- Main Content Area -->
-        <Grid DockPanel.Dock="Top" Margin="0,0,0,1">
+        <!-- ===== MAIN AREA ===== -->
+        <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="200"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition x:Name="SidebarCol" Width="220"/>
             </Grid.ColumnDefinitions>
 
             <!-- Content Viewer -->
-            <ScrollViewer Grid.Column="0" Margin="0,0,1,0" VerticalScrollBarVisibility="Auto">
-                <StackPanel x:Name="ContentPanel" Background="White" Padding="15"/>
-            </ScrollViewer>
+            <Border Grid.Column="0" Background="White"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="0">
+                <FlowDocumentScrollViewer x:Name="ContentViewer"
+                                          VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          IsToolBarVisible="False"
+                                          Document="{x:Null}"/>
+            </Border>
 
-            <!-- Links Sidebar -->
-            <Border Grid.Column="1" Background="#F9F9F9" BorderBrush="#DDD" BorderThickness="1,0,0,0">
-                <StackPanel>
-                    <TextBlock Text="Links" Foreground="#333" FontSize="12" FontWeight="Bold"
-                               Padding="10" Background="#E8F4F8" BorderBrush="#DDD" BorderThickness="0,0,0,1"/>
-                    <ListBox x:Name="LinksListBox" Background="Transparent" BorderThickness="0"
-                             SelectionChanged="LinksListBox_SelectionChanged">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Foreground="#667eea"
-                                          Cursor="Hand" Padding="8" FontSize="11"/>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </StackPanel>
+            <!-- Splitter -->
+            <GridSplitter Grid.Column="1" Width="5"
+                          Background="{StaticResource BorderBrush}"
+                          HorizontalAlignment="Stretch" Cursor="SizeWE"/>
+
+            <!-- Sidebar -->
+            <Border Grid.Column="2" Background="{StaticResource Surface2Brush}"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0">
+                <DockPanel>
+                    <!-- Sidebar Tabs -->
+                    <Border DockPanel.Dock="Top" Background="White"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="SideLinksBtn" Click="SideTab_Click" Tag="links"
+                                    Height="34" Padding="12,0" BorderThickness="0"
+                                    Background="{StaticResource PrimaryBrush}" Foreground="White"
+                                    FontSize="11" FontWeight="SemiBold" Cursor="Hand">Links</Button>
+                            <Button x:Name="SideHistBtn" Click="SideTab_Click" Tag="history"
+                                    Height="34" Padding="12,0" BorderThickness="0"
+                                    Background="Transparent" Foreground="{StaticResource TextSecondaryBrush}"
+                                    FontSize="11" FontWeight="Normal" Cursor="Hand">History</Button>
+                            <Button x:Name="SideBookBtn" Click="SideTab_Click" Tag="bookmarks"
+                                    Height="34" Padding="12,0" BorderThickness="0"
+                                    Background="Transparent" Foreground="{StaticResource TextSecondaryBrush}"
+                                    FontSize="11" FontWeight="Normal" Cursor="Hand">Saved</Button>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Search within sidebar -->
+                    <Border DockPanel.Dock="Top" Padding="8,6"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                        <TextBox x:Name="SideSearch" Height="26"
+                                 VerticalContentAlignment="Center" Padding="8,0"
+                                 FontSize="11" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                 Tag="Filter…" TextChanged="SideSearch_TextChanged"/>
+                    </Border>
+
+                    <!-- Links Panel -->
+                    <Grid x:Name="SideLinksPanel">
+                        <ListBox x:Name="LinksListBox"
+                                 Style="{StaticResource SideListStyle}"
+                                 SelectionChanged="LinksListBox_SelectionChanged">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Text}"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{StaticResource PrimaryBrush}"
+                                                   FontSize="11" FontWeight="Medium"/>
+                                        <TextBlock Text="{Binding Href}"
+                                                   TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="9.5" Margin="0,1,0,0"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+
+                    <!-- History Panel -->
+                    <Grid x:Name="SideHistPanel" Visibility="Collapsed">
+                        <ListBox x:Name="HistoryListBox"
+                                 Style="{StaticResource SideListStyle}"
+                                 SelectionChanged="HistoryListBox_SelectionChanged">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}" TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   FontSize="11" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="{Binding Url}" TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   FontSize="9.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,1,0,0"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+
+                    <!-- Bookmarks Panel -->
+                    <Grid x:Name="SideBookPanel" Visibility="Collapsed">
+                        <ListBox x:Name="BookmarksListBox"
+                                 Style="{StaticResource SideListStyle}"
+                                 SelectionChanged="BookmarksListBox_SelectionChanged">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}" TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   FontSize="11" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="{Binding Url}" TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   FontSize="9.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,1,0,0"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </DockPanel>
             </Border>
         </Grid>
     </DockPanel>

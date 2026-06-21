@@ -1,216 +1,305 @@
+using Bogus;
+
 namespace WebBrowser.Game;
 
 public class GameSession
 {
+    public string Id { get; } = Guid.NewGuid().ToString("N");
     public string Username { get; set; } = string.Empty;
     public string Role { get; set; } = "user";
-    public int CurrentLevel { get; set; } = 0;
-    public bool IsAuthenticated { get; set; } = false;
-    public DateTime LoginTime { get; set; }
+    public int CurrentLevel { get; set; } = 1;
+    public bool IsAuthenticated { get; set; }
+    public DateTime LoginTime { get; set; } = DateTime.UtcNow;
+    public List<int> CompletedLevels { get; } = new();
 }
 
 public class GameEngine
 {
     private readonly Dictionary<string, GameSession> _sessions = new();
-    private readonly Dictionary<string, string> _credentials = new() { { "admin", "adminpass" } };
-    private readonly Random _random = new();
+    private readonly List<(string Username, string Password)> _levelCreds = new();
+    private readonly Faker _faker = new();
 
-    private const string AdminCredential = "admin";
-    private const string AdminPassword = "adminpass";
-
-    private readonly string[] _hints = new[]
-    {
-        "Try basic SQL Injection with ' OR '1'='1",
-        "Try adding ' OR '1'='1 to the password",
-        "Look for XSS vulnerabilities in the search box.",
-        "Try injecting a <script>alert('XSS')</script> tag.",
-        "Find a way to inject SQL through multiple parameters.",
-        "Try a more complex SQL Injection attack.",
-        "Look for different vectors for XSS.",
-        "Try DOM-based XSS attack vectors.",
-        "Explore potential authentication bypass.",
-        "Look for directory traversal vulnerabilities.",
-        "Try advanced SQL Injection with union-based attack.",
-        "Try time-based blind SQL Injection.",
-        "Attempt to bypass advanced XSS filters.",
-        "Exploit CSRF vulnerabilities in forms.",
-        "Look for local file inclusion (LFI) vulnerabilities.",
-        "Try remote file inclusion (RFI) attacks.",
-        "Explore advanced authentication bypass techniques.",
-        "Attempt to bypass multi-factor authentication.",
-        "Look for remote code execution (RCE) vulnerabilities.",
-        "Try to find zero-day vulnerabilities akin to Google security."
-    };
+    private readonly string[] _hints =
+    [
+        "Try SQL Injection: enter <code>' OR '1'='1</code> as the username.",
+        "Password bypass: use <code>' OR '1'='1'--</code> in the password field.",
+        "Look for a reflected XSS flaw in the search parameter.",
+        "Try injecting <code>&lt;script&gt;alert('XSS')&lt;/script&gt;</code> in the name field.",
+        "Use multi-parameter SQL Injection across username AND email fields.",
+        "Try a UNION-based SQL Injection to extract the users table.",
+        "The page reflects data from a cookie — try XSS via cookie injection.",
+        "Attempt a DOM-based XSS via the <code>hash</code> fragment of the URL.",
+        "The session cookie has no <code>HttpOnly</code> flag. Can you steal it?",
+        "Try path traversal: <code>../../etc/passwd</code> in the file parameter.",
+        "Use UNION SELECT to enumerate the database schema.",
+        "Try time-based blind SQLi: <code>' OR SLEEP(3)--</code>.",
+        "The XSS filter blocks script tags — try <code>&lt;img onerror=alert(1)&gt;</code>.",
+        "The form lacks a CSRF token. Craft a request from another origin.",
+        "LFI: use <code>?file=../../../../etc/hosts</code> to read system files.",
+        "RFI: provide an external URL as the file parameter.",
+        "The password check can be bypassed — try logging in as <code>admin'--</code>.",
+        "The MFA code is predictable (timestamp-based). Can you compute the next one?",
+        "The file upload doesn't validate extensions — try a .php disguised as .jpg.",
+        "Chained exploit: combine SSRF + RCE to execute commands on the server."
+    ];
 
     public GameEngine()
     {
-        GenerateLevelCredentials();
-    }
-
-    private void GenerateLevelCredentials()
-    {
-        var faker = new Faker.Faker();
         for (int i = 0; i < 20; i++)
-        {
-            var username = faker.Internet.UserName();
-            var password = GeneratePassword();
-            _credentials[username] = password;
-        }
-    }
-
-    private string GeneratePassword()
-    {
-        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        return new string(Enumerable.Range(0, 8).Select(_ => chars[_random.Next(chars.Length)]).ToArray());
+            _levelCreds.Add((_faker.Internet.UserName(), _faker.Internet.Password(8)));
     }
 
     public string CreateSession(string username, string password)
     {
-        if (username == AdminCredential && password == AdminPassword)
+        if (username == "admin" && password == "adminpass")
         {
-            var sessionId = Guid.NewGuid().ToString();
-            _sessions[sessionId] = new GameSession
-            {
-                Username = username,
-                Role = "admin",
-                IsAuthenticated = true,
-                LoginTime = DateTime.UtcNow
-            };
-            return sessionId;
+            var s = new GameSession { Username = username, Role = "admin", IsAuthenticated = true };
+            _sessions[s.Id] = s;
+            return s.Id;
         }
 
-        if (_credentials.TryGetValue(username, out var storedPassword) && storedPassword == password)
+        for (int i = 0; i < _levelCreds.Count; i++)
         {
-            var sessionId = Guid.NewGuid().ToString();
-            var level = _credentials.Keys.ToList().IndexOf(username) + 1;
-            _sessions[sessionId] = new GameSession
+            if (_levelCreds[i].Username == username && _levelCreds[i].Password == password)
             {
-                Username = username,
-                Role = "user",
-                CurrentLevel = level,
-                IsAuthenticated = true,
-                LoginTime = DateTime.UtcNow
-            };
-            return sessionId;
+                var s = new GameSession { Username = username, Role = "user", CurrentLevel = i + 1, IsAuthenticated = true };
+                _sessions[s.Id] = s;
+                return s.Id;
+            }
         }
 
         return string.Empty;
     }
 
-    public GameSession? GetSession(string sessionId)
-    {
-        return _sessions.TryGetValue(sessionId, out var session) ? session : null;
-    }
+    public GameSession? GetSession(string id) =>
+        _sessions.TryGetValue(id, out var s) ? s : null;
 
-    public void DestroySession(string sessionId)
-    {
-        _sessions.Remove(sessionId);
-    }
+    public void DestroySession(string id) => _sessions.Remove(id);
 
-    public string GetHint(int level)
-    {
-        return level > 0 && level <= _hints.Length ? _hints[level - 1] : "No hint available";
-    }
+    public string GetHint(int level) =>
+        level >= 1 && level <= _hints.Length ? _hints[level - 1] : "No hint available for this level.";
 
-    public string RenderLoginPage()
-    {
-        return @"
+    public string RenderLoginPage(string? error = null) => $@"
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Hacking Game - Login</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-               display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .login-box { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-                     width: 300px; }
-        h1 { color: #333; text-align: center; margin-top: 0; }
-        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; padding: 10px; margin-top: 20px; background: #667eea; color: white; border: none;
-                 border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
-        button:hover { background: #764ba2; }
-    </style>
+<meta charset='utf-8'>
+<title>Hacking Game — Login</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'Segoe UI', sans-serif;
+          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+          min-height: 100vh; display: flex; align-items: center; justify-content: center; }}
+  .card {{ background: rgba(255,255,255,0.05); backdrop-filter: blur(20px);
+           border: 1px solid rgba(255,255,255,0.1); border-radius: 20px;
+           padding: 40px; width: 380px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); }}
+  .logo {{ text-align: center; font-size: 3em; margin-bottom: 8px; }}
+  h1 {{ text-align: center; color: #e2e8f0; font-size: 1.5em; font-weight: 500; margin-bottom: 4px; }}
+  .subtitle {{ text-align: center; color: #94a3b8; font-size: 0.85em; margin-bottom: 32px; }}
+  label {{ display: block; color: #cbd5e1; font-size: 0.85em; font-weight: 500;
+           margin-bottom: 6px; letter-spacing: 0.5px; }}
+  input {{ width: 100%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+           border-radius: 10px; padding: 12px 16px; color: #e2e8f0; font-size: 0.95em;
+           outline: none; transition: border 0.2s; margin-bottom: 18px; }}
+  input:focus {{ border-color: #667eea; background: rgba(255,255,255,0.12); }}
+  button {{ width: 100%; background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none; border-radius: 10px; padding: 13px; color: white;
+            font-size: 1em; font-weight: 600; cursor: pointer; margin-top: 8px;
+            transition: opacity 0.2s; letter-spacing: 0.5px; }}
+  button:hover {{ opacity: 0.88; }}
+  .hint {{ background: rgba(102,126,234,0.15); border: 1px solid rgba(102,126,234,0.3);
+           border-radius: 8px; padding: 10px 14px; margin-top: 20px;
+           color: #a5b4fc; font-size: 0.8em; text-align: center; }}
+  .error {{ background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3);
+            border-radius: 8px; padding: 10px 14px; margin-bottom: 20px;
+            color: #fca5a5; font-size: 0.85em; text-align: center; }}
+  .divider {{ text-align: center; color: #475569; font-size: 0.8em; margin: 16px 0; }}
+</style>
 </head>
 <body>
-    <div class=""login-box"">
-        <h1>🎮 Hacking Game</h1>
-        <form method=""POST"" action=""/api/login"">
-            <input type=""text"" name=""username"" placeholder=""Username"" required>
-            <input type=""password"" name=""password"" placeholder=""Password"" required>
-            <button type=""submit"">Login</button>
-        </form>
-        <p style=""text-align: center; color: #888; margin-top: 20px;"">Admin: admin / adminpass</p>
+  <div class='card'>
+    <div class='logo'>🕵️</div>
+    <h1>Hacking Challenge</h1>
+    <p class='subtitle'>20 levels of security vulnerabilities</p>
+
+    {(error != null ? $"<div class='error'>⚠ {System.Net.WebUtility.HtmlEncode(error)}</div>" : "")}
+
+    <form method='POST' action='/game/login'>
+      <label>Username</label>
+      <input type='text' name='username' placeholder='Enter username' autocomplete='off'>
+      <label>Password</label>
+      <input type='password' name='password' placeholder='Enter password'>
+      <button type='submit'>→ Login</button>
+    </form>
+
+    <div class='hint'>
+      💡 Admin credentials: <strong>admin</strong> / <strong>adminpass</strong>
     </div>
+  </div>
 </body>
 </html>";
-    }
 
-    public string RenderAdminPage(string sessionId)
-    {
-        var session = GetSession(sessionId);
-        if (session == null) return "";
-
-        return $@"
+    public string RenderAdminPage(GameSession session) => $@"
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Admin Panel</title>
-    <style>
-        body {{ font-family: Arial; background: #f5f5f5; margin: 0; padding: 20px; }}
-        .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        h1 {{ color: #667eea; }}
-        .info {{ background: #e8f4f8; padding: 15px; border-left: 4px solid #667eea; margin: 20px 0; }}
-        a {{ color: #667eea; text-decoration: none; margin-right: 15px; }}
-        a:hover {{ text-decoration: underline; }}
-    </style>
+<meta charset='utf-8'>
+<title>Admin Panel</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'Segoe UI', sans-serif; background: #0f0f1a; color: #e2e8f0; min-height: 100vh; }}
+  .topbar {{ background: linear-gradient(135deg, #667eea, #764ba2); padding: 20px 40px;
+             display: flex; align-items: center; justify-content: space-between; }}
+  .topbar h1 {{ font-size: 1.3em; font-weight: 600; }}
+  .logout {{ color: rgba(255,255,255,0.8); text-decoration: none; font-size: 0.85em;
+             background: rgba(255,255,255,0.15); padding: 6px 14px; border-radius: 20px; }}
+  .content {{ max-width: 900px; margin: 40px auto; padding: 0 20px; }}
+  .welcome {{ background: rgba(102,126,234,0.1); border: 1px solid rgba(102,126,234,0.2);
+              border-radius: 12px; padding: 24px; margin-bottom: 30px; }}
+  .welcome h2 {{ font-size: 1.2em; margin-bottom: 8px; color: #a5b4fc; }}
+  .stat-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 30px; }}
+  .stat {{ background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; text-align: center; }}
+  .stat-num {{ font-size: 2.5em; font-weight: 700; color: #667eea; }}
+  .stat-label {{ font-size: 0.8em; color: #94a3b8; margin-top: 4px; }}
+  .levels {{ background: rgba(255,255,255,0.03); border-radius: 12px; padding: 24px; }}
+  .levels h3 {{ color: #94a3b8; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }}
+  .level-grid {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }}
+  .level-btn {{ background: rgba(102,126,234,0.15); border: 1px solid rgba(102,126,234,0.3);
+                border-radius: 8px; padding: 12px; text-align: center; cursor: pointer; }}
+  .level-btn a {{ color: #a5b4fc; text-decoration: none; font-size: 0.85em; font-weight: 500; }}
+  .level-btn:hover {{ background: rgba(102,126,234,0.3); }}
+</style>
 </head>
 <body>
-    <div class=""container"">
-        <h1>🔒 Admin Panel</h1>
-        <div class=""info"">
-            <p><strong>Welcome, {session.Username}!</strong></p>
-            <p>Your task is to find and fix vulnerabilities in the game system.</p>
-        </div>
-        <p><a href=""/game/logout"">Logout</a></p>
+  <div class='topbar'>
+    <h1>🔐 Admin Panel</h1>
+    <a class='logout' href='/game/logout?session={session.Id}'>Logout</a>
+  </div>
+  <div class='content'>
+    <div class='welcome'>
+      <h2>Welcome back, {System.Net.WebUtility.HtmlEncode(session.Username)}!</h2>
+      <p style='color:#94a3b8;font-size:0.9em;'>You have administrator access. You can view all challenge levels and user sessions.</p>
     </div>
+    <div class='stat-grid'>
+      <div class='stat'>
+        <div class='stat-num'>20</div>
+        <div class='stat-label'>Total Levels</div>
+      </div>
+      <div class='stat'>
+        <div class='stat-num'>{_sessions.Count}</div>
+        <div class='stat-label'>Active Sessions</div>
+      </div>
+      <div class='stat'>
+        <div class='stat-num'>8</div>
+        <div class='stat-label'>Vuln Categories</div>
+      </div>
+    </div>
+    <div class='levels'>
+      <h3>Challenge Levels</h3>
+      <div class='level-grid'>
+        {string.Join("", Enumerable.Range(1, 20).Select(i =>
+            $"<div class='level-btn'><a href='/game/level?n={i}&session={session.Id}'>Level {i}</a></div>"))}
+      </div>
+    </div>
+  </div>
 </body>
 </html>";
-    }
 
-    public string RenderUserPage(string sessionId)
+    public string RenderUserPage(GameSession session)
     {
-        var session = GetSession(sessionId);
-        if (session == null) return "";
-
         var hint = GetHint(session.CurrentLevel);
+        var progress = (double)session.CurrentLevel / 20 * 100;
+
         return $@"
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Level {session.CurrentLevel}</title>
-    <style>
-        body {{ font-family: Arial; background: #f5f5f5; margin: 0; padding: 20px; }}
-        .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        h1 {{ color: #667eea; }}
-        .level-indicator {{ background: #667eea; color: white; padding: 10px 15px; border-radius: 5px; display: inline-block; margin: 10px 0; }}
-        .hint {{ background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; border-radius: 4px; }}
-        .hint-title {{ font-weight: bold; color: #856404; }}
-        a {{ color: #667eea; text-decoration: none; }}
-        a:hover {{ text-decoration: underline; }}
-    </style>
+<meta charset='utf-8'>
+<title>Level {session.CurrentLevel} — Hacking Challenge</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'Segoe UI', sans-serif; background: #0f0f1a; color: #e2e8f0; min-height: 100vh; }}
+  .topbar {{ background: rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.08);
+             padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; }}
+  .level-badge {{ background: linear-gradient(135deg, #667eea, #764ba2);
+                  padding: 6px 16px; border-radius: 20px; font-size: 0.85em; font-weight: 600; }}
+  .logout {{ color: #94a3b8; text-decoration: none; font-size: 0.85em; }}
+  .progress-bar {{ width: 100%; height: 3px; background: rgba(255,255,255,0.08); }}
+  .progress-fill {{ height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); width: {progress}%; transition: width 0.6s; }}
+  .content {{ max-width: 760px; margin: 48px auto; padding: 0 20px; }}
+  .card {{ background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+           border-radius: 16px; padding: 36px; margin-bottom: 24px; }}
+  .card h1 {{ font-size: 1.6em; color: #a5b4fc; margin-bottom: 6px; }}
+  .user-info {{ color: #64748b; font-size: 0.85em; margin-bottom: 24px; }}
+  .hint-box {{ background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.2);
+               border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; }}
+  .hint-label {{ font-size: 0.75em; text-transform: uppercase; letter-spacing: 1.5px;
+                 color: #fbbf24; margin-bottom: 8px; font-weight: 600; }}
+  .hint-text {{ color: #fde68a; font-size: 0.95em; line-height: 1.7; }}
+  .hint-text code {{ background: rgba(251,191,36,0.15); padding: 2px 8px; border-radius: 4px;
+                     font-family: 'Consolas', monospace; font-size: 0.9em; }}
+  .actions {{ display: flex; gap: 12px; }}
+  .btn {{ padding: 12px 24px; border-radius: 10px; font-size: 0.9em; font-weight: 600;
+          text-decoration: none; cursor: pointer; letter-spacing: 0.3px; border: none; }}
+  .btn-primary {{ background: linear-gradient(135deg, #667eea, #764ba2); color: white; }}
+  .btn-ghost {{ background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; }}
+  .level-map {{ display: flex; gap: 4px; flex-wrap: wrap; }}
+  .lm {{ width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center;
+         justify-content: center; font-size: 0.75em; font-weight: 600;
+         background: rgba(255,255,255,0.06); color: #64748b; }}
+  .lm.current {{ background: linear-gradient(135deg, #667eea, #764ba2); color: white; }}
+  .lm.done {{ background: rgba(34,197,94,0.2); color: #4ade80; }}
+</style>
 </head>
 <body>
-    <div class=""container"">
-        <h1>🎯 Hacking Challenge</h1>
-        <div class=""level-indicator"">Level {session.CurrentLevel} / 20</div>
-        <p><strong>Welcome, {session.Username}!</strong></p>
-        <div class=""hint"">
-            <div class=""hint-title"">💡 Hint:</div>
-            {hint}
-        </div>
-        <p><a href=""/game/next"">Next Level →</a> | <a href=""/game/logout"">Logout</a></p>
+  <div class='topbar'>
+    <div class='level-badge'>Level {session.CurrentLevel} of 20</div>
+    <span style='color:#64748b;font-size:0.85em;'>Logged in as <strong style='color:#94a3b8'>{System.Net.WebUtility.HtmlEncode(session.Username)}</strong></span>
+    <a class='logout' href='/game/logout?session={session.Id}'>Logout</a>
+  </div>
+  <div class='progress-bar'><div class='progress-fill'></div></div>
+
+  <div class='content'>
+    <div class='card'>
+      <h1>🎯 Level {session.CurrentLevel}</h1>
+      <p class='user-info'>{GetLevelCategory(session.CurrentLevel)}</p>
+      <div class='hint-box'>
+        <div class='hint-label'>💡 Objective</div>
+        <div class='hint-text'>{hint}</div>
+      </div>
+      <div class='actions'>
+        <a class='btn btn-primary' href='/game/next?session={session.Id}'>Complete Level →</a>
+        <a class='btn btn-ghost' href='/game/login'>← Back to Login</a>
+      </div>
     </div>
+
+    <div class='card' style='padding: 24px 36px;'>
+      <p style='color:#64748b;font-size:0.8em;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;'>Progress</p>
+      <div class='level-map'>
+        {string.Join("", Enumerable.Range(1, 20).Select(i =>
+            $"<div class='lm {(i == session.CurrentLevel ? "current" : i < session.CurrentLevel ? "done" : "")}'>{i}</div>"))}
+      </div>
+    </div>
+  </div>
 </body>
 </html>";
     }
+
+    private static string GetLevelCategory(int level) => level switch
+    {
+        1 or 2 => "SQL Injection — Basics",
+        3 or 4 => "Cross-Site Scripting (XSS) — Reflected",
+        5 or 6 => "SQL Injection — Advanced",
+        7 or 8 => "XSS — DOM & Stored",
+        9 => "Authentication Bypass",
+        10 => "Path Traversal",
+        11 or 12 => "SQL Injection — Blind & UNION",
+        13 => "XSS — Filter Evasion",
+        14 => "CSRF",
+        15 or 16 => "File Inclusion (LFI/RFI)",
+        17 or 18 => "Authentication — MFA Bypass",
+        19 => "Remote Code Execution",
+        20 => "Chained Exploit",
+        _ => "Unknown"
+    };
 }
